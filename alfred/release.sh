@@ -107,7 +107,7 @@ $WHATS_NEW
 
 Keywords: \`speak <text>\`, \`voice\` (pick and preview a voice), \`shh\` (stop). The voice and speed live in \`~/.config/phonon-reader/\`.
 
-**Updating:** import the new workflow and let Alfred replace the existing one (same bundle id, \`$BUNDLE_ID\`). Your saved voice and rate are kept (they live in `~/.config/phonon-reader/`); Alfred should keep your hotkey too.
+**Updating:** import the new workflow and let Alfred replace the existing one (same bundle id, \`$BUNDLE_ID\`). Your saved voice and rate are kept (they live in \`~/.config/phonon-reader/\`); Alfred should keep your hotkey too.
 
 **If nothing is spoken after the import**, macOS may have quarantined the downloaded scripts: right-click the workflow in Alfred → *Open in Finder*, then run \`xattr -dr com.apple.quarantine\` on that folder.
 
