@@ -10,7 +10,7 @@ Inspired by [Ollama: speech models](https://ollama.com/blog/speech-models).
 |---|---|
 | macOS | any recent version (uses only built-in zsh, perl, curl, jq, afplay, osascript) |
 | [Ollama](https://ollama.com) | ≥ 0.40.9, with `ollama pull phonon` |
-| A chat model, for Summarize | `ollama pull gemma4:e2b-mlx` (Apple Silicon), or any model via `PHONON_SUM_MODEL` |
+| A chat model, for Summarize | `ollama pull gemma4:e2b-mlx` (Apple Silicon; elsewhere `gemma4:e2b`), or any chat model via `PHONON_SUM_MODEL` |
 | [Alfred](https://www.alfredapp.com) + Powerpack | 5 or 6, only for the Alfred front-end |
 
 No pip or brew installs.

@@ -46,7 +46,7 @@ Found with a throwaway spike workflow (Alfred 6.0.2). Alfred's own [openai-workf
 | ⌥↩ never reached its connection (Alfred ran a Finder search) | Not used |
 | Script-file source (`inputtype 1`, `inputfile`) can't pass flags; a path with a slash (`bin/summarize-alfred`) works | A two-line wrapper calls `summarize -f alfred` |
 
-**State lives in the view.** The summary, its language, the cached English translation, the clipboard source and the pid of the reading this view started all travel in `variables`. So there are no state files and no pruning, the selected text never touches the disk, and each view's commands act on its own summary. The only background process is the existing TTS worker. `stop` / `shh` stop speech and never break a view.
+**State lives in the view.** The summary, its language, the cached English translation, the clipboard source and the pid of the reading this view started all travel in `variables`. So the summarizer keeps no state files and needs no pruning, and each view's commands act on its own summary. (Read-aloud still goes through `speak-selection`, which writes the text as temporary chunks under `~/Library/Caches/phonon-reader/run.*` and deletes them when playback ends or is stopped.) The only background process is the existing TTS worker. `stop` / `shh` stop speech and never break a view.
 
 ## Streaming (deferred)
 
