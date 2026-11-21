@@ -121,12 +121,35 @@ footer_base() {   # the hints line, with the model and timing
 # Alfred Text View reply: response, footer, and the state the view must carry
 # (a reply without `variables` clears them). sum_text holds the source only when
 # it came from the clipboard, so `full` reads the original even after `copy`.
+# While a reading started from this view plays, the reply also carries its pid
+# (sum_pid) and what it reads (sum_playing), and asks Alfred to rerun the script
+# every second, so the footer goes back to the hints when the reading ends.
+# reply_keep_input=1 leaves the input field alone (a rerun while you type).
+reply_keep_input=0
 alfred_reply() {   # alfred_reply RESPONSE FOOTER [MD BASEFOOTER]
-  SUM_TEXT=${sum_text-} jq -n --arg r $1 --arg f $2 --arg md "${3-}" --arg base "${4-}" '
-    {response: $r, footer: $f, behaviour: {response: "replace", inputfield: "clear"}}
+  SUM_TEXT=${sum_text-} SUM_PID=${sum_pid-} SUM_PLAYING=${sum_playing-} \
+  jq -n --arg r $1 --arg f $2 --arg md "${3-}" --arg base "${4-}" --argjson keep $reply_keep_input '
+    {response: $r, footer: $f,
+     behaviour: ({response: "replace"} + (if $keep == 1 then {} else {inputfield: "clear"} end))}
     + (if $md == "" then {} else {variables: ({sum_md: $md, sum_foot: $base}
-        + (if env.SUM_TEXT == "" then {} else {sum_text: env.SUM_TEXT} end))} end)'
+        + (if env.SUM_TEXT == "" then {} else {sum_text: env.SUM_TEXT} end)
+        + (if env.SUM_PID == "" then {} else {sum_pid: env.SUM_PID, sum_playing: env.SUM_PLAYING} end))} end)
+    + (if env.SUM_PID == "" then {} else {rerun: 1} end)'
 }
+
+# Is the reading this view started still playing? (speak-stop or a newer
+# reading replaces $STATE/pid, so compare it with ours.)
+view_playing() {
+  [[ -n ${sum_pid-} && -r $STATE/pid && $(<$STATE/pid) == $sum_pid ]] && kill -0 $sum_pid 2>/dev/null
+}
+
+start_reading() {   # start_reading WHAT < text: speak stdin, remember the worker pid
+  $BIN/speak-selection >/dev/null
+  sum_pid=$(<$STATE/pid 2>/dev/null) sum_playing=$1
+  [[ -n $sum_pid ]] || sum_playing=
+}
+
+playing_footer() { print -r -- "🔊 Reading the $sum_playing · type stop" }
 
 if [[ $format == alfred ]]; then
   cmd=${${1:-}:l}; cmd=${cmd//[[:space:]]/}
@@ -149,25 +172,37 @@ if [[ $format == alfred ]]; then
     alfred_reply $md $base $md $base
     exit 0
   fi
-  # Later runs: a command typed in the input field. Always re-send the state.
+  # Later runs: a command typed in the input field, or a rerun while reading.
+  # Always re-send the state.
   base=${sum_foot:-$(footer_base)}
+  was_playing=${sum_pid:+1}
+  if [[ -n ${sum_pid-} ]] && ! view_playing; then
+    sum_pid= sum_playing=   # the reading ended (or was stopped elsewhere, e.g. shh)
+  fi
   case $cmd in
     r|read)
-      print -r -- $sum_md | $BIN/strip-markdown -s | $BIN/speak-selection >/dev/null
-      foot="🔊 Reading the summary · type stop" ;;
+      print -r -- $sum_md | $BIN/strip-markdown -s | start_reading summary
+      foot=$(playing_footer) ;;
     f|full)
-      src=${sum_text:-${sum_source-}}
-      print -r -- $src | $BIN/speak-selection >/dev/null
-      foot="🔊 Reading the original text · type stop" ;;
+      print -r -- ${sum_text:-${sum_source-}} | start_reading "original text"
+      foot=$(playing_footer) ;;
     s|stop)
+      sum_pid= sum_playing=
       $BIN/speak-stop >/dev/null && foot="⏹ Stopped · $base" || foot=$base ;;
     c|copy)
       print -rn -- $sum_md | pbcopy
       foot="✓ Copied as Markdown · $base" ;;
-    '')
-      foot=$base ;;
     *)
-      foot="Unknown command '$1' · $base" ;;
+      if [[ -n $was_playing ]]; then
+        # Rerun while reading, or the one right after it ended ($1 may be text
+        # still being typed): status only, and leave the input field alone.
+        reply_keep_input=1
+        [[ -n ${sum_pid-} ]] && foot=$(playing_footer) || foot=$base
+      elif [[ -z $cmd ]]; then
+        foot=$base
+      else
+        foot="Unknown command '$1' · $base"
+      fi ;;
   esac
   alfred_reply $sum_md $foot $sum_md $base
   exit 0
