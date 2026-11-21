@@ -98,24 +98,25 @@ $WHATS_NEW
 
 ## Installation
 
-1. Install [Ollama](https://ollama.com) 0.40.9 or later, then pull the voice model:
+1. Install [Ollama](https://ollama.com) 0.40.9 or later, then pull the voice model and, for Summarize, the summary model:
    \`\`\`bash
    ollama pull phonon
+   ollama pull gemma4:e2b-mlx
    \`\`\`
 2. Download \`$ARTIFACT\` and double-click it to import it into Alfred.
-3. In Alfred Preferences → Workflows → **$NAME**, double-click the **Hotkey** trigger and record a key (e.g. ⌃⌥S). Check that *Argument* shows "Selection in macOS" and set it if not.
-4. Select text in any app and press the hotkey. Press it again to stop.
+3. In Alfred Preferences → Workflows → **$NAME**, double-click each **Hotkey** trigger and record a key (e.g. ⌃⌥S to speak, ⌃⌥⇧S to summarize). Check that *Argument* shows "Selection in macOS" and set it if not.
+4. Select text in any app and press the hotkey. Press the speak hotkey again to stop. In a summary, type \`read\`, \`full\`, \`stop\` or \`copy\` and press ↩ (⌘↩ copies and closes).
 
-Keywords: \`speak <text>\`, \`voice\` (pick and preview a voice), \`shh\` (stop). The voice and speed live in \`~/.config/phonon-reader/\`.
+Keywords: \`speak <text>\`, \`sum [text]\` (summarize; the clipboard if empty), \`voice\` (pick and preview a voice), \`shh\` (stop). The voice and speed live in \`~/.config/phonon-reader/\`.
 
-**Updating:** import the new workflow and let Alfred replace the existing one (same bundle id, \`$BUNDLE_ID\`). Your saved voice and rate are kept (they live in \`~/.config/phonon-reader/\`); Alfred should keep your hotkey too.
+**Updating:** import the new workflow and let Alfred replace the existing one (same bundle id, \`$BUNDLE_ID\`). Your saved voice and rate are kept (they live in \`~/.config/phonon-reader/\`); Alfred should keep your hotkeys too; a newly added hotkey (such as Summarize in 0.2.0) needs a key the first time.
 
 **If nothing is spoken after the import**, macOS may have quarantined the downloaded scripts: right-click the workflow in Alfred → *Open in Finder*, then run \`xattr -dr com.apple.quarantine\` on that folder.
 
 ## Requirements
 
-- macOS with Alfred 5 or 6 and the Powerpack
-- Ollama 0.40.9 or later, with \`phonon\` pulled
+- macOS with Alfred 5 or 6 and the Powerpack (Summarize needs Alfred 5.5 or later)
+- Ollama 0.40.9 or later, with \`phonon\` pulled, and \`gemma4:e2b-mlx\` for Summarize
 - No other installs: zsh, perl, curl, jq and afplay ship with macOS
 
 ## Checksum
