@@ -9,7 +9,10 @@ PIDFILE=$STATE/pid
 pid=$(<$PIDFILE)
 rm -f $PIDFILE
 
-if kill -0 $pid 2>/dev/null; then
+# Signal it only if it's still our worker: a stale pid file (worker killed
+# without cleanup) can point at a reused pid that belongs to something else.
+if kill -0 $pid 2>/dev/null &&
+   [[ $(ps -p $pid -o command= 2>/dev/null) == *speak-selection*' -W '* ]]; then
   # Freeze the worker so it can't spawn the next afplay, kill its children, then it.
   kill -STOP $pid 2>/dev/null
   pkill -P $pid 2>/dev/null

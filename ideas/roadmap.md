@@ -14,6 +14,7 @@
 - [ ] **Rate in Alfred:** a `rate` keyword (Script Filter with 0.9 / 1.0 / 1.15 / 1.3).
 - [ ] **Pause/resume:** `kill -STOP` / `-CONT` on the worker and afplay. Cheap, and good enough.
 - [ ] **Read-later:** a `-o file.wav` export, i.e. "turn this article into audio".
+- [ ] **Atomic start (single-reader race):** two front-ends launched < 10 ms apart both pass `speak-stop`, and the older worker can overwrite `$STATE/pid` after the newer one, leaving a reading that `stop`/toggle can't reach. Measured: 0 ms gap → 1 untracked reader in 4/4 trials; 10 ms and above → never. A human double-tap can't hit it; a script firing two readings can. Fix: wrap stop → mktemp → spawn → wait-for-pid in `zsystem flock` (`zsh/system`), which the kernel releases if the process dies, so no stale lock.
 
 ## v1: native app (only if v0.x proves itself)
 - Swift menu-bar app, or a SelectTTS fork:

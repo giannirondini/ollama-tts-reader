@@ -120,7 +120,15 @@ Summarize the text above in $summary_lang. Every sentence, the TL;DR one include
 }
 
 # detect_language TEXT → the language name in English (e.g. "Italian"), from the
-# first 500 characters; "English" if the model's answer isn't a plain word.
+# first 500 characters. Small models sometimes answer in a phrase ("The language
+# is Italian", "Simplified Chinese"), so lang_name keeps the last word; it returns
+# "English" if that isn't a plain word.
+lang_name() {
+  local words=(${=${1//[^[:alpha:][:space:]]/}})
+  local name=${${words[-1]-}:l}
+  [[ -n $name && ${#name} -le 20 && $name != language ]] && print -r -- ${(C)name} || print English
+}
+
 detect_language() {
   local name=$(print -r -- ${1[1,500]} |
     jq -Rs --arg m $model '{model: $m, stream: false, think: false, keep_alive: "2m",
@@ -129,8 +137,7 @@ detect_language() {
                  {role: "user", content: .}]}' |
     curl -sS --max-time 30 -H 'Content-Type: application/json' -d @- $URL/api/chat 2>/dev/null |
     jq -r '.message.content // empty' 2>/dev/null)
-  name=${${name//[^[:alpha:]]/}:l}
-  [[ -n $name && ${#name} -le 20 ]] && print -r -- ${(C)name} || print English
+  lang_name "$name"
 }
 
 is_english() { [[ ${1:l} == (english|en) ]] }

@@ -3,9 +3,10 @@
 #
 # Ollama's /v1/audio/speech rejects input over 4096 chars, and every chunk
 # boundary costs ~1s of afplay start/stop silence. So:
-#   - chunk 1 is just the first sentence  => speech starts almost immediately
+#   - chunk 1 is just the first sentence (after a one-line title: title + first sentence)
+#     => speech starts almost immediately
 #   - later chunks pack whole paragraphs up to MAX chars => gaps land on paragraph breaks
-#   - oversized paragraphs fall back to sentence, then word boundaries
+#   - oversized paragraphs fall back to sentence, then word boundaries, then hard cuts
 #
 # Usage: chunk-text [MAX]   (default 3500)
 use strict;
@@ -22,7 +23,16 @@ my $text = <STDIN> // '';
 my @paragraphs = grep { /\S/ } split /\n\s*\n/, $text;
 exit 0 unless @paragraphs;
 
-sub sentences { split /(?<=[.!?…])\s+(?=\S)/, shift }
+# Split at . ! ? … followed by whitespace, then glue back pieces that ended on an
+# abbreviation ("Dr.", "e.g.") or an initial ("J."), which aren't sentence ends.
+my $ABBREV = qr/(?:^|\s)(?:(?i:mr|mrs|ms|dr|prof|sr|jr|st|vs|cf|fig|e\.g|i\.e)|\p{Lu})\.$/;
+sub sentences {
+    my @out;
+    for my $s (split /(?<=[.!?…])\s+(?=\S)/, shift) {
+        if (@out && $out[-1] =~ $ABBREV) { $out[-1] .= " $s" } else { push @out, $s }
+    }
+    return @out;
+}
 
 # Break one over-long piece into <= $MAX parts at sentence, then word, boundaries.
 sub split_long {
@@ -31,6 +41,8 @@ sub split_long {
     my @parts = ('');
     for my $s (sentences($piece)) {
         my @words = length $s > $MAX ? split(/\s+/, $s) : ($s);
+        # A single token longer than $MAX (base64, URLs) is cut into $MAX-sized pieces.
+        @words = map { length($_) > $MAX ? /(.{1,$MAX})/gs : $_ } @words;
         for my $w (@words) {
             if (length($parts[-1]) + length($w) + 1 > $MAX && length $parts[-1]) {
                 push @parts, $w;
@@ -46,9 +58,18 @@ my @chunks;
 
 # Fast start: speak the first sentence on its own.
 my ($first, @rest) = sentences($paragraphs[0]);
-if (@rest) {
+if (@rest && length $first <= $MAX) {
     push @chunks, $first;
     $paragraphs[0] = join ' ', @rest;
+} elsif (!@rest && @paragraphs > 1) {
+    # A title or one-line intro: on its own it plays ~2 s, shorter than synthesizing
+    # the next full chunk, so pair it with the first sentence of the body.
+    my ($next, @more) = sentences($paragraphs[1]);
+    if (length("$first\n\n$next") <= $MAX) {
+        push @chunks, "$first\n\n$next";
+        splice @paragraphs, 0, 1;
+        if (@more) { $paragraphs[0] = join ' ', @more } else { shift @paragraphs }
+    }
 }
 
 my $current = '';
