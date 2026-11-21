@@ -1,6 +1,6 @@
 #!/bin/zsh
 # build.sh — package the Alfred workflow as a self-contained .alfredworkflow
-# (info.plist + a copy of ../bin). Double-click the result to import it.
+# (info.plist + a copy of ../bin, including bin/lib). Double-click the result to import it.
 #
 # Usage: alfred/build.sh [version]
 #   version   MAJOR.MINOR.PATCH; written to ../VERSION. Without it, VERSION is used as is.
@@ -28,9 +28,10 @@ trap 'rm -rf $STAGE' EXIT
 plutil -lint $HERE/info.plist
 cp $HERE/info.plist $STAGE/
 plutil -replace version -string $VERSION $STAGE/info.plist
-mkdir $STAGE/bin
+mkdir -p $STAGE/bin/lib
 cp $ROOT/bin/*(.) $STAGE/bin/
-chmod +x $STAGE/bin/*
+chmod +x $STAGE/bin/*(.)
+cp $ROOT/bin/lib/*(.) $STAGE/bin/lib/   # sourced helpers, not executables
 
 mkdir -p $OUT
 rm -f $OUT/$WORKFLOW

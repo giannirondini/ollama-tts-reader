@@ -24,3 +24,15 @@ Implemented in `bin/unwrap-text` (perl, no dependencies). Check the result witho
 - Chunk 1 = the first sentence only, so speech starts in about 0.1–0.3 s once the model is warm.
 - After that, whole paragraphs are packed into chunks of up to 3,500 chars. The API rejects anything over 4,096, and silences between chunks then land on paragraph breaks.
 - An oversized paragraph is split at sentence boundaries, then word boundaries. Tested: 10 k chars of unpunctuated text → 3 chunks, each ≤ 3,500.
+
+## Markdown → plain text (`bin/strip-markdown`)
+Used on summaries before they're spoken (`-s`) or shown in the `-f text` / `-f dialog` formats.
+
+| Input | Output |
+|---|---|
+| code fences, horizontal rules | dropped |
+| `# heading`, `> quote`, `- item`, `1. item` | the text only |
+| `**bold**`, `*italic*`, `_italic_`, `` `code` `` | the text only (`snake_case` words are kept) |
+| `[text](url)`, `![alt](src)` | `text`, `alt` |
+| `-s` (speech): `TL;DR:` | `In short:` |
+| `-s` (speech): a line ending without punctuation | `.` added, so TTS pauses between bullets |

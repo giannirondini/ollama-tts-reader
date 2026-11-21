@@ -1,6 +1,6 @@
 # ollama-tts-reader
 
-Select text in **any macOS app** → hear it read by **Ollama's local Phonon TTS** in the voice you chose. Hard line wraps (PDFs, emails, terminals) are joined first, so sentences flow naturally. Everything runs locally.
+Select text in **any macOS app** → hear it read by **Ollama's local Phonon TTS** in the voice you chose, or get a **short summary from a local Gemma model** first. Hard line wraps (PDFs, emails, terminals) are joined first, so sentences flow naturally. Everything runs locally.
 
 Inspired by [Ollama: speech models](https://ollama.com/blog/speech-models).
 
@@ -10,6 +10,7 @@ Inspired by [Ollama: speech models](https://ollama.com/blog/speech-models).
 |---|---|
 | macOS | any recent version (uses only built-in zsh, perl, curl, jq, afplay, osascript) |
 | [Ollama](https://ollama.com) | ≥ 0.40.9, with `ollama pull phonon` |
+| A chat model, for Summarize | `ollama pull gemma4:e2b-mlx` (Apple Silicon; elsewhere `gemma4:e2b`), or any chat model via `PHONON_SUM_MODEL` |
 | [Alfred](https://www.alfredapp.com) + Powerpack | 5 or 6, only for the Alfred front-end |
 
 No pip or brew installs.
@@ -35,8 +36,16 @@ bin/speak-selection -n < some.txt                 # dry run: show cleaned chunks
 bin/speak-selection -s Freya                      # save default voice
 bin/speak-stop                                    # stop
 ```
+
+Summarize:
+```bash
+pbpaste | bin/summarize                          # Markdown: TL;DR + bullets, in the text's language
+bin/summarize -l English < article.txt           # force the summary language
+bin/summarize -f text "…"                         # plain text (Markdown stripped)
+pbpaste | bin/summarize -f dialog                 # dialog with Read aloud / Copy / Close
+```
 Front-ends (pick one or both):
-- **Alfred 5/6** (hotkey, Universal Action, `speak` / `voice` / `shh`): [alfred/README.md](alfred/README.md)
+- **Alfred 5/6** (hotkeys, Universal Actions, `speak` / `voice` / `shh`, and `sum` for summaries in a Text View with `read` / `full` / `stop` / `copy`): [alfred/README.md](alfred/README.md)
 - **Right-click → Services → Speak with Phonon**: [macos/README-quick-action.md](macos/README-quick-action.md)
 
 ## How it works
@@ -51,17 +60,20 @@ selection ─► unwrap-text ─► chunk-text ─► [detached worker, own sess
 - If Ollama is down (local URL only), it launches Ollama.app hidden (`open -gj`, so no chat window pops over your text; falls back to `ollama serve`) and waits up to `$PHONON_START_TIMEOUT` s (default 10). If Ollama still isn't up, it says so out loud as well as in a notification, because `osascript` notifications are often hidden.
 - Calling it again stops the current reading; `-t` toggles. State lives in `~/Library/Caches/phonon-reader/`, and the voice and rate settings in `~/.config/phonon-reader/`.
 
+**Summarize** (`bin/summarize`) sends the selection to Ollama's `/api/chat` (`gemma4:e2b-mlx`, about 1 s warm) and asks for a TL;DR line plus 3–7 bullets. The summary is in the text's own language; read-aloud is always English (Phonon is English-only), so a non-English summary is translated before it's spoken. Settings: `PHONON_SUM_MODEL` / `sum_model`, `PHONON_SUM_LANG` / `sum_lang` (`same` by default, or a language such as `English`), in the same config folder. Design notes: [ideas/summarization.md](ideas/summarization.md).
+
 ## Folder map
 | Path | What |
 |---|---|
-| `bin/` | `speak-selection`, `speak-stop`, `unwrap-text`, `chunk-text`, `phonon-voices` |
+| `bin/` | `speak-selection`, `speak-stop`, `unwrap-text`, `chunk-text`, `phonon-voices`, `summarize` (+ `summarize-alfred`), `strip-markdown`, `lib/common.zsh` |
 | `alfred/` | workflow source (`info.plist`), `build.sh` (local build into `dist/`), `release.sh` |
 | `macos/` | Services / Quick Action and Hammerspoon setup |
 | `docs/DISTRIBUTION.md` | versioning and the GitHub release process |
 | `research/ollama-phonon.md` | API facts, **verified limits** (no mp3, speed = 1 only, 4096-char cap), voices |
 | `research/existing-tools.md` | prior art: SelectTTS, Narrateify, aloud-tts, Alfred/Raycast/PopClip options |
 | `ideas/integration-approaches.md` | trigger options compared, with a recommendation |
-| `ideas/text-cleanup.md` | unwrap and chunking rules, known limitations |
+| `ideas/text-cleanup.md` | unwrap, chunking and strip-markdown rules, known limitations |
+| `ideas/summarization.md` | summarizer design: prompt lessons, language rules, Alfred Text View behavior |
 | `ideas/roadmap.md` | v0.2 polish → v1 native app |
 
 ## License
