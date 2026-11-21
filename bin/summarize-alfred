@@ -1,0 +1,4 @@
+#!/bin/zsh
+# summarize-alfred — entry point for the Alfred Text View (Script file source),
+# which can't pass flags. See `summarize -h`, "Alfred mode".
+exec ${0:A:h}/summarize -f alfred "$@"

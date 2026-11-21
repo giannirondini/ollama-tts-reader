@@ -57,8 +57,9 @@ if [[ $BUILT_VERSION != $VERSION ]]; then
   info "Run alfred/build.sh $VERSION first"
   exit 1
 fi
-for f in $ROOT/bin/*(.); do
-  cmp -s $f $WORK/unzipped/bin/${f:t} || { err "The built workflow's bin/${f:t} differs from bin/${f:t}"; info "Run alfred/build.sh first"; exit 1 }
+for f in $ROOT/bin/*(.) $ROOT/bin/lib/*(.); do
+  rel=${f#$ROOT/}
+  cmp -s $f $WORK/unzipped/$rel || { err "The built workflow's $rel differs from $rel"; info "Run alfred/build.sh first"; exit 1 }
 done
 cp $HERE/info.plist $WORK/source.plist
 plutil -replace version -string $VERSION $WORK/source.plist

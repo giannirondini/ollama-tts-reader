@@ -1,0 +1,40 @@
+#!/usr/bin/perl
+# strip-markdown — turn a Markdown summary into plain text (stdin → stdout).
+#
+# Usage: strip-markdown [-s]
+#   -s   speech: also make the text read well aloud ("TL;DR:" → "In short:",
+#        every line ends with a sentence mark so TTS pauses between bullets)
+#
+# Drops code fences, heading marks, emphasis, inline code and link targets
+# ("[text](url)" → "text"), and turns list items into plain lines.
+use strict;
+use warnings;
+use utf8;
+binmode STDIN, ':encoding(UTF-8)';
+binmode STDOUT, ':encoding(UTF-8)';
+
+my $speech = @ARGV && $ARGV[0] eq '-s';
+my @out;
+while (my $line = <STDIN>) {
+  chomp $line;
+  next if $line =~ /^\s*(```|~~~)/;               # code fence markers
+  next if $line =~ /^\s*([-*_])(\s*\1){2,}\s*$/;  # horizontal rules
+  $line =~ s/^\s{0,3}#{1,6}\s+//;                  # headings
+  $line =~ s/^\s*>\s?//;                           # block quotes
+  $line =~ s/^\s*(?:[-*+]|\d+[.)])\s+//;           # list markers
+  $line =~ s/!?\[([^\]]*)\]\([^)]*\)/$1/g;         # links and images → their text
+  $line =~ s/`([^`]*)`/$1/g;                       # inline code
+  $line =~ s/(\*\*|__)(.+?)\1/$2/g;                # bold
+  $line =~ s/(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])/$1/g;  # *italic*
+  $line =~ s/(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/$1/g;          # _italic_
+  $line =~ s/\s+$//;
+  if ($speech) {
+    $line =~ s/^TL;?DR:?\s*/In short: /i;
+    $line .= '.' if $line =~ /[\w)"'”’]$/;       # pause between bullets
+  }
+  push @out, $line;
+}
+my $text = join "\n", @out;
+$text =~ s/\n{3,}/\n\n/g;
+$text =~ s/^\n+|\n+$//g;
+print "$text\n" if length $text;
