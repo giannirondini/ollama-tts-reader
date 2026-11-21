@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Built Alfred workflow (local test build) and release output: published on GitHub Releases
+alfred/dist/
+.build/
+
+# Local working notes
+docs/plans/
+
+# Audio exports and local agent settings
+*.wav
+.claude/settings.local.json

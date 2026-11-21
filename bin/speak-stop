@@ -1,0 +1,21 @@
+#!/bin/zsh
+# speak-stop — stop whatever speak-selection is currently reading.
+# Exit 0 if something was stopped, 1 if nothing was playing.
+
+STATE=$HOME/Library/Caches/phonon-reader
+PIDFILE=$STATE/pid
+
+[[ -r $PIDFILE ]] || { rm -rf $STATE/run.*(N); exit 1 }
+pid=$(<$PIDFILE)
+rm -f $PIDFILE
+
+if kill -0 $pid 2>/dev/null; then
+  # Freeze the worker so it can't spawn the next afplay, kill its children, then it.
+  kill -STOP $pid 2>/dev/null
+  pkill -P $pid 2>/dev/null
+  kill -KILL $pid 2>/dev/null
+  rm -rf $STATE/run.*(N)
+  exit 0
+fi
+rm -rf $STATE/run.*(N)
+exit 1

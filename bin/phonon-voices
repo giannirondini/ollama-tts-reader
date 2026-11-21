@@ -1,0 +1,34 @@
+#!/bin/zsh
+# phonon-voices — list the voices of the Phonon model, one per line.
+#   phonon-voices          plain list
+#   phonon-voices --alfred Alfred Script Filter JSON (current voice marked)
+
+MODEL=${PHONON_MODEL:-phonon}
+URL=${PHONON_URL:-http://localhost:11434}
+CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/phonon-reader
+current=${PHONON_VOICE:-$( [[ -r $CONFIG/voice ]] && print -r -- "$(<$CONFIG/voice)" )}
+current=${current:-Zoey}
+
+voices=$(curl -sS --max-time 5 "$URL/api/show" -d "{\"model\":\"$MODEL\"}" 2>/dev/null | /usr/bin/jq -r '.voices[]?')
+
+if [[ $1 != --alfred ]]; then
+  [[ -n $voices ]] || { print -u2 "No voices: is Ollama running and '$MODEL' pulled?"; exit 1; }
+  print -r -- $voices
+  exit 0
+fi
+
+if [[ -z $voices ]]; then
+  /usr/bin/jq -n '{items: [{title: "Ollama not reachable", subtitle: "Start Ollama and run: ollama pull phonon", valid: false}]}'
+  exit 0
+fi
+
+print -r -- $voices | /usr/bin/jq -R -s --arg cur "$current" '
+  split("\n") | map(select(length > 0)) |
+  {items: map({
+     uid: .,
+     title: (if ((. | ascii_downcase) == ($cur | ascii_downcase)) then "✓ " + . else . end),
+     subtitle: "↩ use this voice · ⌘↩ preview",
+     arg: .,
+     match: .,
+     mods: {cmd: {arg: ., subtitle: ("Preview " + .)}}
+  })}'

@@ -1,0 +1,146 @@
+#!/bin/zsh
+# speak-selection — read text aloud with Ollama's Phonon TTS.
+#
+# Text source (first match wins): arguments, stdin, clipboard.
+# Hard line wraps are joined first (see unwrap-text), then the text is sent to
+# Ollama's /v1/audio/speech in chunks; chunk N+1 is synthesized while N plays.
+# Runs detached, so Automator / Alfred return immediately. Calling it again
+# while speaking stops the previous reading first.
+#
+# Usage: speak-selection [-n] [-v VOICE] [-r RATE] [-s VOICE] [text...]
+#   -n        dry run: print the cleaned chunks instead of speaking
+#   -v VOICE  voice for this call (default: $PHONON_VOICE, saved voice, Zoey)
+#   -r RATE   playback rate, e.g. 1.2 (default: $PHONON_RATE, saved rate, 1.0)
+#             The API only supports speed 1, so this is applied by afplay.
+#   -s VOICE  save VOICE as the default and exit
+#   -t        toggle: if something is playing, stop it and exit
+
+emulate -L zsh
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH   # Alfred/Automator run with a bare env
+
+BIN=${0:A:h}
+MODEL=${PHONON_MODEL:-phonon}
+URL=${PHONON_URL:-http://localhost:11434}
+STATE=$HOME/Library/Caches/phonon-reader
+CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/phonon-reader
+
+notify() {
+  osascript -e "display notification \"${1//\"/\\\"}\" with title \"Speak with Phonon\"" 2>/dev/null
+}
+
+read_setting() { [[ -r $CONFIG/$1 ]] && print -r -- "$(<$CONFIG/$1)" }
+
+ollama_up() { curl -sf --max-time 1 $URL/api/version >/dev/null 2>&1 }
+
+# If Ollama is down, launch it and wait up to $PHONON_START_TIMEOUT seconds (default 10).
+# Only for a local URL: a remote server can't be started from here.
+ensure_ollama() {
+  ollama_up && return 0
+  [[ $URL == http://(localhost|127.0.0.1)(:*|) ]] || return 1
+  notify "Ollama isn't running. Starting it…"
+  if ! open -gj -a Ollama 2>/dev/null; then   # -g: no focus steal, -j: hidden (no chat window)
+    # No Ollama.app: start the CLI server in a subshell so it isn't our child
+    # (speak-stop kills the worker's children with pkill -P).
+    (( $+commands[ollama] )) || return 1
+    ( ollama serve >/dev/null 2>&1 &! )
+  fi
+  zmodload zsh/zselect
+  local deadline=$(( SECONDS + ${PHONON_START_TIMEOUT:-10} ))
+  while (( SECONDS < deadline )); do
+    ollama_up && return 0
+    zselect -t 25   # 0.25 s
+  done
+  return 1
+}
+
+dry_run=0 toggle=0 voice= rate= worker=
+while getopts "nv:r:s:tW:h" opt; do
+  case $opt in
+    W) worker=$OPTARG ;;   # internal: play the chunks prepared in run dir $OPTARG
+    n) dry_run=1 ;;
+    v) voice=$OPTARG ;;
+    r) rate=$OPTARG ;;
+    s) mkdir -p $CONFIG && print -r -- "$OPTARG" > $CONFIG/voice; exit 0 ;;
+    t) toggle=1 ;;
+    *) sed -n '2,/^$/s/^# \{0,1\}//p' $0; exit 0 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if (( toggle )) && $BIN/speak-stop; then
+  exit 0
+fi
+
+voice=${voice:-${PHONON_VOICE:-$(read_setting voice)}}
+voice=${voice:-Zoey}
+rate=${rate:-${PHONON_RATE:-$(read_setting rate)}}
+rate=${rate:-1.0}
+
+synth() {   # synth TEXTFILE WAVFILE
+  local body code
+  body=$(jq -n --arg m $MODEL --arg v $voice --rawfile t $1 \
+    '{model: $m, voice: $v, input: $t, response_format: "wav"}')
+  code=$(curl -sS --max-time 120 -o $2 -w '%{http_code}' \
+    -H 'Content-Type: application/json' -d "$body" $URL/v1/audio/speech 2>$run/curl.err)
+  [[ $code == 200 ]] && return 0
+  if [[ $code == 000 ]]; then
+    notify "Ollama is not reachable at $URL"
+  else
+    notify "$(jq -r '.error.message // .error // "HTTP '$code'"' $2 2>/dev/null)"
+  fi
+  return 1
+}
+
+if [[ -n $worker ]]; then
+  run=$worker
+  print $$ > $STATE/pid
+  if ! ensure_ollama; then
+    # Notifications from osascript are often suppressed, so also say it out loud.
+    notify "Ollama is not reachable at $URL"
+    say "Ollama is not running." 2>/dev/null
+    rm -rf $run
+    [[ $(<$STATE/pid) == $$ ]] && rm -f $STATE/pid
+    exit 1
+  fi
+  i=0 player=
+  while [[ -r $run/$i.txt ]]; do
+    synth $run/$i.txt $run/$i.wav || break
+    [[ -n $player ]] && wait $player
+    afplay -q 1 -r $rate $run/$i.wav & player=$!
+    (( i++ ))
+  done
+  [[ -n $player ]] && wait $player
+  rm -rf $run
+  [[ $(<$STATE/pid) == $$ ]] && rm -f $STATE/pid
+  exit 0
+fi
+
+if (( $# )); then
+  text="$*"
+elif [[ ! -t 0 ]]; then
+  text=$(cat)
+else
+  text=$(pbpaste)
+fi
+
+chunks=("${(@0)$(print -rn -- "$text" | $BIN/unwrap-text | $BIN/chunk-text)}")
+chunks=(${chunks:#})   # drop empty trailing element
+(( ${#chunks} )) || exit 0
+
+if (( dry_run )); then
+  for c in $chunks; do print -r -- "$c"; print -- '---'; done
+  exit 0
+fi
+
+$BIN/speak-stop
+mkdir -p $STATE
+run=$(mktemp -d $STATE/run.XXXXXX)
+for i in {1..${#chunks}}; do print -rn -- "$chunks[i]" > $run/$((i - 1)).txt; done
+
+# New session (setsid) so Automator/Alfred can't take the player down with them.
+perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' -- \
+  ${0:A} -v $voice -r $rate -W $run </dev/null >/dev/null 2>>$STATE/log &!
+
+# Don't return until the worker is detached, or the caller's cleanup may still kill it.
+zmodload zsh/zselect
+for _ in {1..40}; do [[ -s $STATE/pid ]] && break; zselect -t 5; done

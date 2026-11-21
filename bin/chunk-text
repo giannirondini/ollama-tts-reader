@@ -1,0 +1,64 @@
+#!/usr/bin/perl
+# chunk-text — split cleaned text into TTS requests, NUL-separated.
+#
+# Ollama's /v1/audio/speech rejects input over 4096 chars, and every chunk
+# boundary costs ~1s of afplay start/stop silence. So:
+#   - chunk 1 is just the first sentence  => speech starts almost immediately
+#   - later chunks pack whole paragraphs up to MAX chars => gaps land on paragraph breaks
+#   - oversized paragraphs fall back to sentence, then word boundaries
+#
+# Usage: chunk-text [MAX]   (default 3500)
+use strict;
+use warnings;
+use utf8;
+
+binmode STDIN,  ':encoding(UTF-8)';
+binmode STDOUT, ':encoding(UTF-8)';
+
+my $MAX = shift // 3500;
+
+local $/;
+my $text = <STDIN> // '';
+my @paragraphs = grep { /\S/ } split /\n\s*\n/, $text;
+exit 0 unless @paragraphs;
+
+sub sentences { split /(?<=[.!?…])\s+(?=\S)/, shift }
+
+# Break one over-long piece into <= $MAX parts at sentence, then word, boundaries.
+sub split_long {
+    my ($piece) = @_;
+    return ($piece) if length $piece <= $MAX;
+    my @parts = ('');
+    for my $s (sentences($piece)) {
+        my @words = length $s > $MAX ? split(/\s+/, $s) : ($s);
+        for my $w (@words) {
+            if (length($parts[-1]) + length($w) + 1 > $MAX && length $parts[-1]) {
+                push @parts, $w;
+            } else {
+                $parts[-1] .= (length $parts[-1] ? ' ' : '') . $w;
+            }
+        }
+    }
+    return @parts;
+}
+
+my @chunks;
+
+# Fast start: speak the first sentence on its own.
+my ($first, @rest) = sentences($paragraphs[0]);
+if (@rest) {
+    push @chunks, $first;
+    $paragraphs[0] = join ' ', @rest;
+}
+
+my $current = '';
+for my $p (map { split_long($_) } @paragraphs) {
+    if (length $current && length($current) + length($p) + 2 > $MAX) {
+        push @chunks, $current;
+        $current = '';
+    }
+    $current .= (length $current ? "\n\n" : '') . $p;
+}
+push @chunks, $current if length $current;
+
+print map { "$_\0" } @chunks;
