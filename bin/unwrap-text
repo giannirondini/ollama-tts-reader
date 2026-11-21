@@ -9,7 +9,8 @@
 #   - blank line            => paragraph break (kept)
 #   - single newline        => joined with a space
 #   - "word-\nnext"         => "wordnext" (de-hyphenation, only before lowercase)
-#   - list items (-, *, •, 1., a)) start a new line instead of being joined
+#   - list items (-, *, •, 1., a)) start a new line instead of being joined; a capital
+#     "B."-"Z." only after a list item or a finished sentence (else it's an initial)
 #   - a prefix shared by every line of a paragraph (> quotes, // or # comments) is stripped
 #   - lines/items without closing punctuation get a period, so the voice pauses
 use strict;
@@ -40,13 +41,21 @@ for my $para (split /\n[ \t]*(?:\n[ \t]*)+/, $text) {
         s/$prefix// for @lines;
     }
 
-    my @segments;
+    my (@segments, @is_item);
     for my $line (@lines) {
         $line =~ s/^\s+|\s+$//g;
         next if $line eq '';
 
-        if (!@segments || $line =~ $LIST_ITEM) {
+        # "B. foo" is a list item only after a list item or a finished sentence;
+        # otherwise it's a wrapped initial ("written\nJ. Smith and others").
+        # "A." always starts a list (a heading may lack punctuation).
+        my $item = $line =~ $LIST_ITEM
+            && !($line =~ /^[B-Z]\.\s/ && @segments
+                 && !$is_item[-1] && $segments[-1] !~ /[.:;!?…]$/);
+
+        if (!@segments || $item) {
             push @segments, $line;
+            push @is_item, $item;
         } elsif ($segments[-1] =~ /\w-$/ && $line =~ /^\p{Ll}/) {
             $segments[-1] =~ s/-$//;
             $segments[-1] .= $line;

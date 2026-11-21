@@ -10,8 +10,14 @@ STATE=$HOME/Library/Caches/phonon-reader
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/phonon-reader
 : ${NOTIFY_TITLE:=Speak with Phonon}
 
+# The text goes in as argv, never spliced into the script: messages can carry
+# server-controlled text (Ollama error bodies) with quotes and backslashes.
 notify() {
-  osascript -e "display notification \"${1//\"/\\\"}\" with title \"$NOTIFY_TITLE\"" 2>/dev/null
+  osascript - "$1" "$NOTIFY_TITLE" >/dev/null 2>&1 <<'OSA'
+on run argv
+  display notification (item 1 of argv) with title (item 2 of argv)
+end run
+OSA
 }
 
 read_setting() { [[ -r $CONFIG/$1 ]] && print -r -- "$(<$CONFIG/$1)" }

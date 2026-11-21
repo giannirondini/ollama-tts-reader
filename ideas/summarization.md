@@ -22,7 +22,7 @@
 
 **Small-model prompt lessons (e2b):**
 - The language instruction must come **first** in the system prompt and be repeated at the end of the user message, or the summary comes back in English. Spell out that the TL;DR sentence is included, or it sometimes stays English.
-- "Reply in the text's own language" is ignored, so `sum_lang=same` first asks the model to name the language (first 500 chars, ~0.1 s), then passes that name explicitly.
+- "Reply in the text's own language" is ignored, so `sum_lang=same` first asks the model to name the language (first 500 chars, ~0.1 s), then passes that name explicitly. Only the last word of the reply is kept ("The language is Italian" → Italian); anything else falls back to English.
 - Ask for "up to N" bullets and forbid filler, or short texts get padding like "No deadline mentioned".
 - The output is normalized afterwards: code fences dropped, `-x` / `* x` / `• x` bullets fixed, blank lines added around the list, empty `Key terms` line removed.
 
