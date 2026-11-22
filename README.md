@@ -4,6 +4,8 @@ Select text in **any macOS app** → hear it read by **Ollama's local Phonon TTS
 
 Inspired by [Ollama: speech models](https://ollama.com/blog/speech-models).
 
+<img width="1526" height="1350" alt="live-text-view-summary" src="https://github.com/user-attachments/assets/64e511d9-4bc4-47c3-a013-2353da30c078" />
+
 ## Requirements
 
 | What | Version |
